@@ -1,0 +1,120 @@
+<?php
+
+/** Users Page module. Developed by Noah Caldwell.
+ *
+ *  Basic module that displays a list of all users in the database. (Except 'root' and 'admin'.)
+ *  Usernames listed in a table, limited to 10 per page. A pager provides next/previous page 
+ *  functionality. There is also a searchbox allowing search by username.
+ *  Send bug reports to noahgreycaldwell@gmail.com
+**/
+
+function users_page_help($path, $arg) {
+  switch ($path) {
+    case "admin/help#users_page":
+      return t("Lists all usernames in the databse. Has basic search functionality."); 
+      break; 
+  }
+}
+
+function users_page_menu() {
+  // Implements hook_menu() to add Users Page.
+  $items = array();
+  $items['users_page/custom'] = array(
+    'title' => 'Users Page',
+    'description' => "Lists users of the database.",
+    'page callback' => 'users_page_custom',
+    'access arguments' => array('access content'),
+  );
+  return $items;
+}
+
+function users_page_permission() {
+  return array(
+    'administer my module' => array(
+      'title' => t('Permission for Users Page'),
+      'description' => t('Utilize Users Page.'),
+    ),
+  );
+}
+
+//function users_page_init() {
+//    if (!user_access('access content')) {
+//    drupal_access_denied();
+//  }
+//}
+
+function users_page_custom() {
+  // Custom callback function. Lists all users in the database in table format.
+
+  // put usernames in $userNameArray. I used a MySQL database.
+  $query = db_select('users', 'u');
+    $query->fields('u', array('name'));
+    $result = $query->execute();
+    while($record = $result->fetchAssoc()) {
+      if ($record['name'] != 'admin' and $record['name'] != 'root' and $record['name'] != '')
+        $userNameArray[] = ($record['name']);
+    }
+  $total = count($userNameArray);  // total number users
+  $perPage = 10;                   // number to be displayed per page
+  $header = array('Name');         // table header
+  // assembles rows in the appropriate nested array format
+  $rows = array(array());
+  for ($x = 0; $x < $total; $x++) {
+    $rows[] = array($userNameArray[$x]);
+  }
+  
+  $arr = drupal_get_form('users_page_build_form');  // search box and button
+  $searchQuery = $arr['query']['#value'];           // user-input search string
+  $searched = array();                              // empty array, will later hold query results
+
+  if ($searchQuery !== '') {                        // this block only runs if search box not empty
+    for ($x = 0; $x < $total; $x++) {
+      if (strpos($userNameArray[$x], $searchQuery) !== false) {    // if search string is within any of the usernames,
+        $searched[] = array($userNameArray[$x]);                   // add username to list of query results
+      }
+    }
+  }
+
+  $numSearched = count($searched);                                 // if = 0, search box empty and display table of all usernames
+  if ($numSearched > 0) {                                          // otherwise, display query results
+    $rows = $searched;                                             // replaces full list of usernames with the query results
+  }
+  $currentPage = pager_default_initialize(count($rows), $perPage); // initialize the pager
+  $chunks = array_chunk($rows, $perPage+1, TRUE);                  // splits list into page sized chunks. +1 accounts for the header
+
+
+  $output = drupal_render($arr);                                                          // displays search box and button
+  $output .= theme('table', array('header' => $header, 'rows' => $chunks[$currentPage])); // displays table
+  $output .= theme('pager', array('quantity',count($rows)));                              // displays shows pager
+  return $output;
+}
+
+
+function users_page_build_form($form, &$form_state) {
+  // text field
+  $form['query'] = array(
+    '#type' => 'textfield',
+    '#size' => 60, 
+    '#maxlength' => 32, 
+    '#default_value' => '', 
+  );
+  
+  // submit button
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => 'Search by username',
+  );
+  return $form;
+}
+
+
+function users_page_build_form_submit($form, &$form_state) {
+  // set the provided filter value in the storage
+  $form_state['storage']['query'] = $form_state['values']['query'];
+  // show the form again.
+  $form_state['rebuild'] = TRUE;  
+}
+
+
+
+
